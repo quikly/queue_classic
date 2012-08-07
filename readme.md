@@ -148,7 +148,7 @@ consuming jobs (lock then delete).
 You certainly don't need the queue_classic rubygem to put a job in the queue.
 
 ```bash
-$ psql queue_classic_test -c "INSERT INTO queue_classic_jobs (q_name, method, args) VALUES ('default', 'Kernel.puts', '[\"hello world\"]');"
+$ psql queue_classic_test -c "INSERT INTO queue_classic_jobs (q_name, method, args, priority) VALUES ('default', 'Kernel.puts', '[\"hello world\"]', 1);"
 ```
 
 However, the rubygem will take care of converting your args to JSON and it will also dispatch
@@ -162,6 +162,9 @@ The Ruby API for producing jobs is pretty simple:
 ```ruby
 # This method has no arguments.
 QC.enqueue("Time.now")
+
+Enqueue a job with priority 2 (default is 1)
+QC.enqueue_with_priority(2, "Kernel.puts", "I go first")
 
 # This method has 1 argument.
 QC.enqueue("Kernel.puts", "hello world")
