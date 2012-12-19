@@ -1,7 +1,7 @@
 This is a JRuby-compatible fork of queue_classic.
 For documentation, see the [main queue_classic repo.](https://github.com/ryandotsmith/queue_classic)
 
-v2.0.1
+v2.0.5
 
 queue_classic provides PostgreSQL-backed queueing focused on concurrent job
 locking and minimizing database load while providing a simple, intuitive user
@@ -31,7 +31,7 @@ more advanced queueing features, you should investigate 0MQ, rabbitmq, or redis.
 ### Heroku Postgres
 
 The Heroku Postgres team uses queue_classic to monitor the health of
-customer databases, processng 200 jobs per second using a [fugu](https://postgres.heroku.com/pricing)
+customer databases, processing 200 jobs per second using a [fugu](https://postgres.heroku.com/pricing)
 database. They chose queue_classic because of its simplicity and reliability.
 
 ### Cloudapp
@@ -83,8 +83,14 @@ require "queue_classic/tasks"
 **config/initializers/queue_classic.rb**
 
 ```ruby
-# Optional if you have this set in your shell environment or use Heroku.
-ENV["DATABASE_URL"] = "postgres://username:password@localhost/database_name"
+# queue_classic will by default look for an environment variable DATABASE_URL
+# or QC_DATABASE_URL for a connection string in the format
+# "postgres://username:password@localhost/database_name".  If you use Heroku,
+# this will already be set.
+#
+# If you don't want to set this variable, you can set the connection in an
+# initializer.
+QC::Conn.connection = ActiveRecord::Base.connection.raw_connection
 ```
 
 queue_classic requires a database table and a PL/pgSQL function to be loaded
@@ -92,6 +98,12 @@ into your database. You can load the table and the function by running a migrati
 or using a rake task.
 
 **db/migrations/add_queue_classic.rb**
+
+If you use the migration, and you wish to use commands that reset the database
+from the stored schema (e.g. `rake db:reset`), your application must be
+configured with `config.active_record.schema_format = :sql` in
+`config/application.rb`.  If you don't do this, the PL/pgSQL function that
+queue_classic creates will be lost when you reset the database.
 
 ```ruby
 require 'queue_classic'
@@ -387,7 +399,7 @@ to do inside `handle_failure()`.
 ## Instrumentation
 
 QC will log elapsed time, errors and general usage in the form of data.
-To customize the output of the log data, override `QC.log` and `QC.log_yield`.
+To customize the output of the log data, override `QC.log(data)` and `QC.log_yield(data)`.
 By default, QC uses a simple wrapper around $stdout to put the log data in k=v
 format. For instance:
 
@@ -560,6 +572,7 @@ end
 * Ruby 1.9.2 (tests work in 1.8.7 but compatibility is not guaranteed or supported)
 * Postgres ~> 9.0
 * Rubygem: pg ~> 0.11.0
+* For JRuby, see [queue_classic_java](https://github.com/bdon/queue_classic_java)
 
 ### Running Tests
 
