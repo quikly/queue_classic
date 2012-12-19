@@ -1,11 +1,12 @@
 source :rubygems
 
 gem "rake"
+gem "jdbc-postgres"
 
 gemspec
 
 group :test do
-  gem "ruby-debug19"
   gem "turn"
   gem "minitest"
+  gem "rr"
 end

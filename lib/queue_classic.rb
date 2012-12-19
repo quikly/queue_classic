@@ -1,17 +1,22 @@
 require "scrolls"
-require "pg"
 require "uri"
 
 $: << File.expand_path(__FILE__, "lib")
 
 require "queue_classic/okjson"
 require "queue_classic/conn"
+
 require "queue_classic/queries"
 require "queue_classic/queue"
 require "queue_classic/worker"
 require "queue_classic/setup"
 
 module QC
+
+  class Error < Exception; end
+  # ENV["LOG_LEVEL"] is used in Scrolls
+  Scrolls::Log.start
+
   Root = File.expand_path("..", File.dirname(__FILE__))
   SqlFunctions = File.join(QC::Root, "/sql/ddl.sql")
   DropSqlFunctions = File.join(QC::Root, "/sql/drop_ddl.sql")
@@ -84,7 +89,7 @@ module QC
   end
 
   def self.log(data)
-    Scrolls.log({:lib => :queue_classic}.merge(data))
+    Scrolls.log({:lib => :queue_classic, :level => :debug}.merge(data))
   end
 
 end

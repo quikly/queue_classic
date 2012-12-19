@@ -1,4 +1,5 @@
-# queue_classic
+This is a JRuby-compatible fork of queue_classic.
+For documentation, see the [main queue_classic repo.](https://github.com/ryandotsmith/queue_classic)
 
 v2.0.1
 
@@ -572,3 +573,9 @@ $ rake
 ### License
 
 queue_classic is released under the MIT License (http://www.opensource.org/licenses/mit-license.php).
+
+
+
+## Install
+
+    gem install queue_classic_java

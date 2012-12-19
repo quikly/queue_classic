@@ -1,4 +1,20 @@
 module QC
+  class Executor < java.util.concurrent.ThreadPoolExecutor
+    def initialize(a,b,c,d,e, semaphore)
+      super(a,b,c,d,e)
+      @semaphore = semaphore
+    end
+
+    def beforeExecute(thread, runnable)
+      super
+    end
+
+    def afterExecute(runnable, throwable)
+      @semaphore.release
+      super
+    end
+  end
+
   class Worker
 
     attr_reader :queue
@@ -23,6 +39,10 @@ module QC
       @fork_worker = fork_worker
       @listening_worker = listening_worker
       @max_attempts = max_attempts
+
+      @semaphore = java.util.concurrent.Semaphore.new(thread_pool_size)
+      @pool = Executor.new(thread_pool_size, thread_pool_size, 0, java.util.concurrent.TimeUnit::MILLISECONDS, java.util.concurrent.LinkedBlockingQueue.new, @semaphore)
+
       handle_signals
 
       log(
@@ -34,6 +54,14 @@ module QC
         :listening_worker => listening_worker,
         :max_attempts => max_attempts
       )
+    end
+
+    def thread_pool_size
+      10
+    end
+
+    def shutdown
+      @pool.shutdown
     end
 
     def running?
@@ -51,6 +79,7 @@ module QC
     def handle_signals
       %W(INT TERM).each do |sig|
         trap(sig) do
+          @pool.shutdown
           if running?
             @running = false
             log(:level => :debug, :action => "handle_signal", :running => @running)
@@ -84,18 +113,25 @@ module QC
     end
 
     def work
+      @semaphore.acquire # reserve a thread
       if job = lock_job
-        QC.log_yield(:level => :info, :action => "work_job", :job => job[:id]) do
-          begin
-            call(job)
-          rescue Object => e
-            log(:level => :debug, :action => "failed_work", :job => job[:id], :error => e.inspect)
-            handle_failure(job, e)
-          ensure
-            @queue.delete(job[:id])
-            log(:level => :debug, :action => "delete_job", :job => job[:id])
+        @pool.submit do
+          QC.log_yield(:level => :info, :action => "work_job", :job => job[:id]) do
+            begin
+              retval = call(job)
+            rescue Object => e
+              log(:level => :debug, :action => "failed_work", :job => job[:id], :error => e.inspect)
+              handle_failure(job, e)
+            ensure
+              # Threads in the pool use the same connection as the 'listener' thread for deleting the job,
+              # but this is OK since jdbc-postgres is threadsafe
+              @queue.delete(job[:id])
+              log(:level => :debug, :action => "delete_job", :job => job[:id])
+            end
           end
         end
+      else
+        @semaphore.release
       end
     end
 
