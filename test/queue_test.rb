@@ -9,10 +9,17 @@ class QueueTest < QCTest
   def test_enqueue_with_priority
     QC.enqueue_with_priority(2, "Klass.method")
   end
-  
+
+  def test_respond_to
+    assert_equal(true, QC.respond_to?(:enqueue))
+  end
+
   def test_lock
     QC.enqueue("Klass.method")
-    expected = {:id=>"1", :method=>"Klass.method", :args=>[]}
+
+    # See helper.rb for more information about the large initial id
+    # number.
+    expected = {:id=>(2**34).to_s, :method=>"Klass.method", :args=>[]}
     assert_equal(expected, QC.lock)
   end
 
@@ -69,12 +76,32 @@ class QueueTest < QCTest
     def connection.exec(*args)
       raise PGError
     end
-    assert_raises(PG::Error) { queue.enqueue("Klass.other_method") }    
+    assert_raises(PG::Error) { queue.enqueue("Klass.other_method") }
     assert_equal(1, queue.count)
     queue.enqueue("Klass.other_method")
     assert_equal(2, queue.count)
   rescue PG::Error
     QC::Conn.disconnect
     assert false, "Expected to QC repair after connection error"
+  end
+
+  def test_custom_default_queue
+    queue_class = Class.new do
+      attr_accessor :jobs
+      def enqueue(method, *args)
+        @jobs ||= []
+        @jobs << method
+      end
+    end
+
+    queue_instance = queue_class.new
+    QC.default_queue = queue_instance
+
+    QC.enqueue("Klass.method1")
+    QC.enqueue("Klass.method2")
+
+    assert_equal ["Klass.method1", "Klass.method2"], queue_instance.jobs
+  ensure
+    QC.default_queue = nil
   end
 end

@@ -1,10 +1,7 @@
-require "scrolls"
 require "pg"
 require "uri"
+require "multi_json"
 
-$: << File.expand_path(__FILE__, "lib")
-
-require "queue_classic/okjson"
 require "queue_classic/conn"
 require "queue_classic/queries"
 require "queue_classic/queue"
@@ -64,6 +61,15 @@ module QC
     default_queue.send(sym, *args, &block)
   end
 
+  # Ensure QC.respond_to?(:enqueue) equals true (ruby 1.9 only)
+  def self.respond_to_missing?(method_name, include_private = false)
+    default_queue.respond_to?(method_name)
+  end
+
+  def self.default_queue=(queue)
+    @default_queue = queue
+  end
+
   def self.default_queue
     @default_queue ||= begin
       Queue.new(QUEUE)
@@ -75,7 +81,7 @@ module QC
       t0 = Time.now
       yield
     rescue => e
-      log({:level => :error, :error => e.class, :message => e.message.strip}.merge(data))
+      log({:at => "error", :error => e.inspect}.merge(data))
       raise
     ensure
       t = Integer((Time.now - t0)*1000)
@@ -84,7 +90,18 @@ module QC
   end
 
   def self.log(data)
-    Scrolls.log({:lib => :queue_classic}.merge(data))
+    result = nil
+    data = {:lib => "queue-classic"}.merge(data)
+    if block_given?
+      start = Time.now
+      result = yield
+      data.merge(:elapsed => Time.now - start)
+    end
+    data.reduce(out=String.new) do |s, tup|
+      s << [tup.first, tup.last].join("=") << " "
+    end
+    puts(out) if ENV["DEBUG"]
+    return result
   end
 
 end

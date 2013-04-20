@@ -1,46 +1,51 @@
+require 'thread'
+
 module QC
   module Conn
     extend self
+    @exec_mutex = Mutex.new
 
     def execute(stmt, *params)
-      log(:level => :debug, :action => "exec_sql", :sql => stmt.inspect)
-      begin
-        params = nil if params.empty?
-        r = connection.exec(stmt, params)
-        result = []
-        r.each {|t| result << t}
-        result.length > 1 ? result : result.pop
-      rescue PGError => e
-        log(:error => e.inspect)
-        disconnect
-        raise
+      @exec_mutex.synchronize do
+        log(:at => "exec_sql", :sql => stmt.inspect)
+        begin
+          params = nil if params.empty?
+          r = connection.exec(stmt, params)
+          result = []
+          r.each {|t| result << t}
+          result.length > 1 ? result : result.pop
+        rescue PGError => e
+          log(:error => e.inspect)
+          disconnect
+          raise
+        end
       end
     end
 
     def notify(chan)
-      log(:level => :debug, :action => "NOTIFY")
+      log(:at => "NOTIFY")
       execute('NOTIFY "' + chan + '"') #quotes matter
     end
 
     def listen(chan)
-      log(:level => :debug, :action => "LISTEN")
+      log(:at => "LISTEN")
       execute('LISTEN "' + chan + '"') #quotes matter
     end
 
     def unlisten(chan)
-      log(:level => :debug, :action => "UNLISTEN")
+      log(:at => "UNLISTEN")
       execute('UNLISTEN "' + chan + '"') #quotes matter
     end
 
     def drain_notify
       until connection.notifies.nil?
-        log(:level => :debug, :action => "drain_notifications")
+        log(:at => "drain_notifications")
       end
     end
 
     def wait_for_notify(t)
       connection.wait_for_notify(t) do |event, pid, msg|
-        log(:level => :debug, :action => "received_notification")
+        log(:at => "received_notification")
       end
     end
 
@@ -63,16 +68,25 @@ module QC
       @connection ||= connect
     end
 
+    def connection=(connection)
+      unless connection.instance_of? PG::Connection
+        c = connection.class
+        err = "connection must be an instance of PG::Connection, but was #{c}"
+        raise(ArgumentError, err)
+      end
+      @connection = connection
+    end
+
     def disconnect
-      connection.finish
-    ensure
-      @connection = nil
+      begin connection.finish
+      ensure @connection = nil
+      end
     end
 
     def connect
-      log(:level => :debug, :action => "establish_conn")
+      log(:at => "establish_conn")
       conn = PGconn.connect(
-        db_url.host,
+        db_url.host.gsub(/%2F/i, '/'), # host or percent-encoded socket path
         db_url.port || 5432,
         nil, '', #opts, tty
         db_url.path.gsub("/",""), # database name
@@ -80,7 +94,7 @@ module QC
         db_url.password
       )
       if conn.status != PGconn::CONNECTION_OK
-        log(:level => :error, :message => conn.error)
+        log(:error => conn.error)
       end
       conn
     end

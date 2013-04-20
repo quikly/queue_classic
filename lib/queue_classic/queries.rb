@@ -5,7 +5,7 @@ module QC
     def insert(q_name, method, args, chan=nil, priority=1)
       QC.log_yield(:action => "insert_job") do
         s = "INSERT INTO #{TABLE_NAME} (q_name, method, args, priority) VALUES ($1, $2, $3, $4)"
-        res = Conn.execute(s, q_name, method, OkJson.encode(args), priority)
+        res = Conn.execute(s, q_name, method, MultiJson.encode(args), priority)
         Conn.notify(chan) if chan
       end
     end
@@ -16,7 +16,7 @@ module QC
         {
           :id     => r["id"],
           :method => r["method"],
-          :args   => OkJson.decode(r["args"])
+          :args   => MultiJson.decode(r["args"])
         }
       end
     end
